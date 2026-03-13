@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ricart-Agrawala Visualizer</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header>
+  <div class="title">RICART-AGRAWALA</div>
+  <div class="subtitle">Distributed Mutual Exclusion</div>
+  <div class="phase-indicator">
+    <div class="phase-chip" id="ph1">1. REQUEST</div>
+    <div class="phase-chip" id="ph2">2. REPLY / DEFER</div>
+    <div class="phase-chip" id="ph3">3. CRITICAL SECTION</div>
+    <div class="phase-chip" id="ph4">4. RELEASE</div>
+  </div>
+  <div class="header-stats">
+    <div class="hstat">
+      <div class="hstat-val" id="hMsgs">0</div>
+      <div class="hstat-label">Messages</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="hReplies">0</div>
+      <div class="hstat-label">Replies</div>
+    </div>
+    <div class="hstat">
+      <div class="hstat-val" id="hDefers">0</div>
+      <div class="hstat-label">Deferred</div>
+    </div>
+  </div>
+</header>
+
+<div class="body">
+
+  <!-- LEFT -->
+  <div class="left">
+    <div class="panel-label">// Configuration</div>
+    <div class="left-content">
+
+      <div>
+        <div class="ctrl-label">Number of Nodes</div>
+        <div class="stepper">
+          <button class="step-btn" onclick="changeCount(-1)">−</button>
+          <div class="step-val" id="countVal">4</div>
+          <button class="step-btn" onclick="changeCount(1)">+</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="ctrl-label">Nodes &amp; Timestamps <span class="ctrl-hint">— click ts to edit</span></div>
+        <div class="node-cards" id="nodeCards"></div>
+        <div class="ts-dupe-msg" id="dupMsg">⚠ Duplicate timestamps — tie-broken by node ID</div>
+      </div>
+
+      <div>
+        <div class="ctrl-label">Reply Matrix</div>
+        <div class="matrix-wrap">
+          <table class="matrix" id="replyMatrix"></table>
+        </div>
+        <div class="matrix-legend">
+          Row = requester · Col = replier<br>
+          <span class="legend-got">●</span> got reply &nbsp;
+          <span class="legend-wait">◌</span> waiting &nbsp;
+          <span class="legend-self">—</span> self
+        </div>
+      </div>
+
+      <div>
+        <div class="ctrl-label">Animation Speed</div>
+        <div class="speed-row">
+          <span>Slow</span>
+          <input type="range" id="speedSlider" min="1" max="5" value="3">
+          <span>Fast</span>
+        </div>
+      </div>
+
+      <button class="btn-run" id="runBtn" onclick="run()">▶ SIMULATE</button>
+      <button class="btn-reset" onclick="reset()">↺ RESET</button>
+
+      <div class="rules-box">
+        <div class="rules-title">Algorithm Rules</div>
+        <div style="display:flex;gap:6px"><span class="ri-r">REQ</span> Broadcast REQUEST(ts,id) to all</div>
+        <div style="display:flex;gap:6px"><span class="ri-r">→</span> If not in CS &amp; not competing → <span class="ri-r">REPLY</span></div>
+        <div style="display:flex;gap:6px"><span class="ri-d">⏸</span> If in CS or higher priority → <span class="ri-d">DEFER</span></div>
+        <div style="display:flex;gap:6px"><span class="ri-c">🔒</span> Got all n−1 replies → enter CS</div>
+        <div style="display:flex;gap:6px"><span class="ri-c">★</span> Exit CS → send deferred replies</div>
+        <div class="rules-note">Priority: lower ts wins · tie → lower ID wins</div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- CENTER CANVAS -->
+  <div class="center">
+    <canvas id="canvas"></canvas>
+  </div>
+
+  <!-- RIGHT LOG -->
+  <div class="right">
+    <div class="log-header">
+      <div class="log-title">// Execution Log</div>
+      <div class="log-legend">
+        <div class="leg"><div class="leg-dot leg-rust"></div>REQUEST</div>
+        <div class="leg"><div class="leg-dot leg-teal"></div>REPLY</div>
+        <div class="leg"><div class="leg-dot leg-faint"></div>DEFER</div>
+        <div class="leg"><div class="leg-dot leg-gold"></div>CS</div>
+        <div class="leg"><div class="leg-dot leg-accent"></div>RELEASE</div>
+      </div>
+    </div>
+    <div class="log-body" id="logBody">
+      <div class="log-welcome">
+        Configure nodes and press<br>
+        <span class="welcome-cta">▶ Simulate</span> to watch the<br>
+        Ricart-Agrawala algorithm run.<br><br>
+        All nodes will compete for the<br>
+        <span class="welcome-cs">Critical Section</span> simultaneously.
+      </div>
+    </div>
+    <div class="log-summary">
+      <div class="sum-stat">
+        <div class="sum-val" id="sumMsgs">0</div>
+        <div class="sum-lbl">Total msgs</div>
+      </div>
+      <div class="sum-div"></div>
+      <div class="sum-stat">
+        <div class="sum-val" id="sumReq">0</div>
+        <div class="sum-lbl">Requests</div>
+      </div>
+      <div class="sum-div"></div>
+      <div class="sum-stat">
+        <div class="sum-val" id="sumRep">0</div>
+        <div class="sum-lbl">Replies</div>
+      </div>
+      <div class="sum-div"></div>
+      <div class="sum-stat">
+        <div class="sum-val" id="sumDef">0</div>
+        <div class="sum-lbl">Deferred</div>
+      </div>
+      <div class="sum-div"></div>
+      <div class="sum-cs-order" id="csOrderDisplay">
+        <span class="cs-order-placeholder">CS order will appear here</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="script.js"></script>
+</body>
+</html>
